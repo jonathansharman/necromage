@@ -10,26 +10,32 @@ const Y_RES = 600;
 const UNIT_RADIUS = 10.0;
 const UNIT_SPEED = 1.0;
 
+const PROGRESS_THRESHOLD = 0.25;
+
 const CELL_SIZE = 30.0;
 
 class Unit {
 	field pos;
+	field angle = Random.randomFloat() * 2 * Math.PI;
 	field targetPos;
+	field lastPos;
+	field color;
 
-	constructor(pos) {
+	constructor(pos, color = [64, 128, 0]) {
 		this.pos = pos;
+		this.color = color;
 	}
 }
 
 class MainScene : AbstractScene {
 	field cameraPos;
-	field cameraAngle = 0.0;
+	field mouseDown = false;
 
 	field units = [];
 	field necromage;
 
 	constructor() {
-		this.necromage = new Unit([0, 0]);
+		this.necromage = new Unit([0, 0], [0, 192, 255]);
 		this.cameraPos = this.necromage.pos;
 		this.units.add(this.necromage);
 
@@ -88,13 +94,35 @@ class MainScene : AbstractScene {
 
 	function update(inputManager, events) {
 		for (e : events) {
-			if (e.type == EventType.MOUSE_PRESS) {
-				this.necromage.targetPos = this.screenToGame(inputManager.getMousePosition());
+			switch (e.type) {
+				case EventType.MOUSE_PRESS:
+					this.mouseDown = true;
+					break;
+				case EventType.MOUSE_RELEASE:
+					this.mouseDown = false;
+					break;
+				default:
+					break;
 			}
 		}
+		if (this.mouseDown) {
+			this.necromage.targetPos = this.screenToGame(inputManager.getMousePosition());
+		}
 
+		// Swarm command.
+		if (inputManager.isKeyPressed(KeyboardKey.SPACE)) {
+			targetPos = this.screenToGame(inputManager.getMousePosition());
+			for (unit : this.units) {
+				if (unit != this.necromage) {
+					unit.targetPos = targetPos.clone();
+				}
+			}	
+		}
+
+		// Voluntary movement.
 		for (unit : this.units) {
 			if (unit.targetPos != null) {
+				unit.lastPos = unit.pos.clone();
 				d2 = MainScene.d2(unit.pos, unit.targetPos);
 				if (d2 < UNIT_SPEED * UNIT_SPEED) {
 					unit.pos = unit.targetPos;
@@ -107,6 +135,7 @@ class MainScene : AbstractScene {
 			}
 		}
 
+		// Collisions.
 		for (i = 0; i < this.units.length - 1; ++i) {
 			unit1 = this.units[i];
 			for (j = i + 1; j < this.units.length; ++j) {
@@ -127,7 +156,17 @@ class MainScene : AbstractScene {
 				}
 			}
 		}
-		// Follow the necromage.
+
+		// Check for stuck units and stop them.
+		for (unit : this.units) {
+			if (unit.targetPos != null) {
+				if (MainScene.d2(unit.pos, unit.lastPos) < (PROGRESS_THRESHOLD * UNIT_SPEED) ** 2.0) {
+					unit.targetPos = null;
+				}
+			}
+		}
+
+		// The camera follows the necromage.
 		this.cameraPos = this.necromage.pos;
 	}
 
@@ -143,10 +182,14 @@ class MainScene : AbstractScene {
 
 		for (unit : this.units) {
 			pos = this.gameToScreen(unit.pos);
+			color = unit.targetPos == null
+				? unit.color
+				: [(unit.color[0] + 255) / 2, (unit.color[1] + 255) / 2, (unit.color[2] + 255) / 2]
+				;
 			Graphics2D.Draw.ellipse
 				( pos[0] - UNIT_RADIUS, pos[1] - UNIT_RADIUS
 				, 2 * UNIT_RADIUS, 2 * UNIT_RADIUS
-				, 0, 192, 255
+				, color[0], color[1], color[2]
 				);
 		}
 	}
