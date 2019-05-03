@@ -1,0 +1,153 @@
+import Graphics2D;
+import Graphics2DText;
+import Math;
+import Random;
+import TwoCansAlpha4;
+
+const X_RES = 800;
+const Y_RES = 600;
+
+const UNIT_RADIUS = 10.0;
+const UNIT_SPEED = 1.0;
+
+const CELL_SIZE = 30.0;
+
+class Unit {
+	field pos;
+	field targetPos;
+
+	constructor(pos) {
+		this.pos = pos;
+	}
+}
+
+class MainScene : AbstractScene {
+	field cameraPos;
+	field cameraAngle = 0.0;
+
+	field units = [];
+	field necromage;
+
+	constructor() {
+		this.necromage = new Unit([0, 0]);
+		this.cameraPos = this.necromage.pos;
+		this.units.add(this.necromage);
+
+		for (i = 0; i < 100; ++i) {
+			this.units.add(new Unit([100, 0]));
+		}
+	}
+
+	function screenToGame(pos) {
+		return
+			[ pos[0] + this.cameraPos[0] - X_RES / 2
+			, pos[1] + this.cameraPos[1] - Y_RES / 2
+			];
+	}
+	function gameToScreen(pos) {
+		return
+			[ pos[0] - this.cameraPos[0] + X_RES / 2
+			, pos[1] - this.cameraPos[1] + Y_RES / 2
+			];
+	}
+
+	static function d(pos1, pos2) {
+		return ((pos1[0] - pos2[0]) ** 2.0 + (pos1[1] - pos2[1]) ** 2.0) ** 0.5;
+	}
+	static function d2(pos1, pos2) {
+		return (pos1[0] - pos2[0]) ** 2.0 + (pos1[1] - pos2[1]) ** 2.0;
+	}
+	static function len(pos) {
+		return (pos[0] ** 2.0 + pos[1] ** 2.0) ** 0.5;
+	}
+	static function len2(pos) {
+		return pos[0] ** 2.0 + pos[1] ** 2.0;
+	}
+	static function vecTo(pos, target) {
+		return [target[0] - pos[0], target[1] - pos[1]];
+	}
+	static function add(pos, vec) {
+		pos[0] += vec[0];
+		pos[1] += vec[1];
+	}
+	static function sub(pos, vec) {
+		pos[0] -= vec[0];
+		pos[1] -= vec[1];
+	}
+	static function sum(pos, vec) {
+		return [pos[0] + vec[0], pos[1] + vec[1]];
+	}
+	static function diff(pos, vec) {
+		return [pos[0] - vec[0], pos[1] - vec[1]];
+	}
+	static function normalize(vec, newLen = 1.0) {
+		len = MainScene.len(vec);
+		vec[0] *= newLen / len;
+		vec[1] *= newLen / len;
+	}
+
+	function update(inputManager, events) {
+		for (e : events) {
+			if (e.type == EventType.MOUSE_PRESS) {
+				this.necromage.targetPos = this.screenToGame(inputManager.getMousePosition());
+			}
+		}
+
+		for (unit : this.units) {
+			if (unit.targetPos != null) {
+				d2 = MainScene.d2(unit.pos, unit.targetPos);
+				if (d2 < UNIT_SPEED * UNIT_SPEED) {
+					unit.pos = unit.targetPos;
+					unit.targetPos = null;
+				} else {
+					vec = MainScene.vecTo(unit.pos, unit.targetPos);
+					MainScene.normalize(vec, UNIT_SPEED);
+					MainScene.add(unit.pos, vec);
+				}
+			}
+		}
+
+		for (i = 0; i < this.units.length - 1; ++i) {
+			unit1 = this.units[i];
+			for (j = i + 1; j < this.units.length; ++j) {
+				unit2 = this.units[j];
+				d2 = MainScene.d2(unit1.pos, unit2.pos);
+				if (d2 == 0.0) {
+					// Separate in a random direction if completely overlapping.
+					theta = Random.randomFloat() * 2 * Math.PI;
+					offset = [Math.cos(theta) * UNIT_RADIUS, Math.sin(theta) * UNIT_RADIUS];
+					MainScene.add(unit1.pos, offset);
+					MainScene.sub(unit2.pos, offset);
+				} else if (d2 < (2.0 * UNIT_RADIUS) ** 2.0) {
+					centroid = [(unit1.pos[0] + unit2.pos[0]) / 2, (unit1.pos[1] + unit2.pos[1]) / 2];
+					offset = MainScene.vecTo(unit1.pos, unit2.pos);
+					MainScene.normalize(offset, UNIT_RADIUS);
+					unit1.pos = MainScene.diff(centroid, offset);
+					unit2.pos = MainScene.sum(centroid, offset);
+				}
+			}
+		}
+		// Follow the necromage.
+		this.cameraPos = this.necromage.pos;
+	}
+
+	function render() {
+		Graphics2D.Draw.fill(43, 50, 57);
+
+		p1 = this.gameToScreen([0, 100]);
+		p2 = this.gameToScreen([0, -100]);
+		p3 = this.gameToScreen([100, 0]);
+		p4 = this.gameToScreen([-100, 0]);
+		Graphics2D.Draw.line(p1[0], p1[1], p2[0], p2[1], 1, 255, 255, 255);
+		Graphics2D.Draw.line(p3[0], p3[1], p4[0], p4[1], 1, 255, 255, 255);
+
+		for (unit : this.units) {
+			pos = this.gameToScreen(unit.pos);
+			Graphics2D.Draw.ellipse
+				( pos[0] - UNIT_RADIUS, pos[1] - UNIT_RADIUS
+				, 2 * UNIT_RADIUS, 2 * UNIT_RADIUS
+				, 0, 192, 255
+				);
+		}
+	}
+}
