@@ -1,5 +1,5 @@
 ﻿{
-	"default-title": "The Necromage",
+	"title": "The Necromage",
 	"id": "Necromage",
 	"description": "Conquer the land with necromagic.",
 	"icons": ["assets/icon32.png", "assets/icon256.png"],
