@@ -8,7 +8,7 @@ const X_RES = 800;
 const Y_RES = 600;
 
 const UNIT_RADIUS = 10.0;
-const UNIT_SPEED = 1.0;
+const UNIT_SPEED = 1.5;
 
 const PROGRESS_THRESHOLD = 0.25;
 
@@ -21,9 +21,28 @@ class Unit {
 	field lastPos;
 	field color;
 
-	constructor(pos, color = [64, 128, 0]) {
+	constructor(pos) {
 		this.pos = pos;
-		this.color = color;
+	}
+}
+
+class Necromage : Unit {
+	field zombies = [];
+
+	constructor(pos) : base(pos) {
+		this.color = [0, 192, 255];
+	}
+}
+
+class Zombie : Unit {
+	constructor(pos) : base(pos) {
+		this.color = [64, 128, 0];
+	}
+}
+
+class Peasant : Unit {
+	constructor(pos) : base(pos) {
+		this.color = [128, 96, 64];
 	}
 }
 
@@ -35,12 +54,17 @@ class MainScene : AbstractScene {
 	field necromage;
 
 	constructor() {
-		this.necromage = new Unit([0, 0], [0, 192, 255]);
+		this.necromage = new Necromage([0, 0]);
 		this.cameraPos = this.necromage.pos;
 		this.units.add(this.necromage);
 
-		for (i = 0; i < 100; ++i) {
-			this.units.add(new Unit([100, 0]));
+		for (i = 0; i < 50; ++i) {
+			zombie = new Zombie([100, 0]);
+			this.units.add(zombie);
+			this.necromage.zombies.add(zombie);
+		}
+		for (i = 0; i < 50; ++i) {
+			this.units.add(new Peasant([-100, 0]));
 		}
 	}
 
@@ -112,10 +136,8 @@ class MainScene : AbstractScene {
 		// Swarm command.
 		if (inputManager.isKeyPressed(KeyboardKey.SPACE)) {
 			targetPos = this.screenToGame(inputManager.getMousePosition());
-			for (unit : this.units) {
-				if (unit != this.necromage) {
-					unit.targetPos = targetPos.clone();
-				}
+			for (zombie : this.necromage.zombies) {
+				zombie.targetPos = targetPos.clone();
 			}	
 		}
 
@@ -167,11 +189,18 @@ class MainScene : AbstractScene {
 		}
 
 		// The camera follows the necromage.
-		this.cameraPos = this.necromage.pos;
+		this.cameraPos = [Math.floor(this.necromage.pos[0]), Math.floor(this.necromage.pos[1])];
 	}
 
 	function render() {
 		Graphics2D.Draw.fill(43, 50, 57);
+
+		bg = Images.get("bg.png");
+		for (i = -1; i < X_RES / bg.width + 2; ++i) {
+			for (j = -1; j < Y_RES / bg.height + 2; ++j) {
+				bg.draw(i * bg.width - this.cameraPos[0] % bg.width, j * bg.height - this.cameraPos[1] % bg.height);
+			}
+		}
 
 		p1 = this.gameToScreen([0, 100]);
 		p2 = this.gameToScreen([0, -100]);
@@ -187,7 +216,7 @@ class MainScene : AbstractScene {
 				: [(unit.color[0] + 255) / 2, (unit.color[1] + 255) / 2, (unit.color[2] + 255) / 2]
 				;
 			Graphics2D.Draw.ellipse
-				( pos[0] - UNIT_RADIUS, pos[1] - UNIT_RADIUS
+				( Math.floor(pos[0]) - UNIT_RADIUS, Math.floor(pos[1]) - UNIT_RADIUS
 				, 2 * UNIT_RADIUS, 2 * UNIT_RADIUS
 				, color[0], color[1], color[2]
 				);
