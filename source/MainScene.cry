@@ -6,43 +6,76 @@ import TwoCansAlpha4;
 
 const X_RES = 800;
 const Y_RES = 600;
+const FPS = 60.0;
+const ELAPSED_TIME = 1.0 / FPS;
+
+const H_SCROLL = 200;
+const V_SCROLL = 200;
+const SCROLL_MULTIPLIER = 0.1;
 
 const UNIT_RADIUS = 10.0;
-const UNIT_SPEED = 1.5;
+const UNIT_SPEED = 80;
+const UNIT_ATTACK_SPEED = 1.0;
+const UNIT_ATTACK_DAMAGE = 10.0;
 
 const PROGRESS_THRESHOLD = 0.25;
 
 const CELL_SIZE = 30.0;
 
+enum Faction { ALLY, ENEMY, NEUTRAL }
+
 class Unit {
 	field pos;
 	field angle = Random.randomFloat() * 2 * Math.PI;
+	field health = 100.0;
+	field cooldown = 0.0;
+	field faction;
+
 	field targetPos;
 	field lastPos;
 	field color;
 
-	constructor(pos) {
+	constructor(pos, faction) {
 		this.pos = pos;
+		this.faction = faction;
+	}
+
+	function tryAttack(unit) {
+		// Neutral units don't get involved in fights.
+		if (this.faction == Faction.NEUTRAL || unit.faction == Faction.NEUTRAL) return;
+		// Units from the same faction don't fight.
+		if (this.faction == unit.faction) return;
+		// Can't attack while on cooldown.
+		if (this.cooldown > 0.0) return;
+
+		this.cooldown = 1.0 / UNIT_ATTACK_SPEED;
+		unit.health -= UNIT_ATTACK_DAMAGE;
 	}
 }
 
 class Necromage : Unit {
 	field zombies = [];
 
-	constructor(pos) : base(pos) {
+	constructor(pos) : base(pos, Faction.ALLY) {
 		this.color = [0, 192, 255];
 	}
 }
 
 class Zombie : Unit {
-	constructor(pos) : base(pos) {
+	constructor(pos) : base(pos, Faction.ALLY) {
 		this.color = [64, 128, 0];
 	}
 }
 
 class Peasant : Unit {
-	constructor(pos) : base(pos) {
+	constructor(pos) : base(pos, Faction.ENEMY) {
 		this.color = [128, 96, 64];
+	}
+}
+
+class Corpse : Unit {
+	constructor(pos) : base(pos, Faction.NEUTRAL) {
+		this.color = [128, 128, 128];
 	}
 }
 
@@ -55,7 +88,7 @@ class MainScene : AbstractScene {
 
 	constructor() {
 		this.necromage = new Necromage([0, 0]);
-		this.cameraPos = this.necromage.pos;
+		this.cameraPos = this.necromage.pos.clone();
 		this.units.add(this.necromage);
 
 		for (i = 0; i < 50; ++i) {
@@ -82,16 +115,16 @@ class MainScene : AbstractScene {
 	}
 
 	static function d(pos1, pos2) {
-		return ((pos1[0] - pos2[0]) ** 2.0 + (pos1[1] - pos2[1]) ** 2.0) ** 0.5;
+		return ((pos1[0] - pos2[0]) ** 2 + (pos1[1] - pos2[1]) ** 2) ** 0.5;
 	}
 	static function d2(pos1, pos2) {
-		return (pos1[0] - pos2[0]) ** 2.0 + (pos1[1] - pos2[1]) ** 2.0;
+		return (pos1[0] - pos2[0]) ** 2 + (pos1[1] - pos2[1]) ** 2;
 	}
 	static function len(pos) {
-		return (pos[0] ** 2.0 + pos[1] ** 2.0) ** 0.5;
+		return (pos[0] ** 2 + pos[1] ** 2) ** 0.5;
 	}
 	static function len2(pos) {
-		return pos[0] ** 2.0 + pos[1] ** 2.0;
+		return pos[0] ** 2 + pos[1] ** 2;
 	}
 	static function vecTo(pos, target) {
 		return [target[0] - pos[0], target[1] - pos[1]];
@@ -117,41 +150,55 @@ class MainScene : AbstractScene {
 	}
 
 	function update(inputManager, events) {
+		mousePos = inputManager.getMousePosition();
+
+		// Necromage movement.
+		if (this.necromage.health > 0.0) {
+			vel = [0.0, 0.0];
+			if (inputManager.isKeyPressed(KeyboardKey.W)) {
+				vel[1] -= 1.0;
+			}
+			if (inputManager.isKeyPressed(KeyboardKey.S)) {
+				vel[1] += 1.0;
+			}
+			if (inputManager.isKeyPressed(KeyboardKey.A)) {
+				vel[0] -= 1.0;
+			}
+			if (inputManager.isKeyPressed(KeyboardKey.D)) {
+				vel[0] += 1.0;
+			}
+			if (vel[0] != 0.0 || vel[1] != 0.0) {
+				MainScene.normalize(vel, UNIT_SPEED * ELAPSED_TIME);
+			}
+			MainScene.add(this.necromage.pos, vel);
+		}
+
 		for (e : events) {
 			switch (e.type) {
 				case EventType.MOUSE_PRESS:
-					this.mouseDown = true;
-					break;
-				case EventType.MOUSE_RELEASE:
-					this.mouseDown = false;
+					// Swarm command.
+					targetPos = this.screenToGame(mousePos);
+					for (zombie : this.necromage.zombies) {
+						zombie.targetPos = targetPos.clone();
+					}	
 					break;
 				default:
 					break;
 			}
 		}
-		if (this.mouseDown) {
-			this.necromage.targetPos = this.screenToGame(inputManager.getMousePosition());
-		}
 
-		// Swarm command.
-		if (inputManager.isKeyPressed(KeyboardKey.SPACE)) {
-			targetPos = this.screenToGame(inputManager.getMousePosition());
-			for (zombie : this.necromage.zombies) {
-				zombie.targetPos = targetPos.clone();
-			}	
-		}
-
-		// Voluntary movement.
+		// Update units.
 		for (unit : this.units) {
+			unit.cooldown -= ELAPSED_TIME;
 			if (unit.targetPos != null) {
 				unit.lastPos = unit.pos.clone();
 				d2 = MainScene.d2(unit.pos, unit.targetPos);
-				if (d2 < UNIT_SPEED * UNIT_SPEED) {
+				if (d2 < (UNIT_SPEED * ELAPSED_TIME) ** 2) {
 					unit.pos = unit.targetPos;
 					unit.targetPos = null;
 				} else {
 					vec = MainScene.vecTo(unit.pos, unit.targetPos);
-					MainScene.normalize(vec, UNIT_SPEED);
+					MainScene.normalize(vec, UNIT_SPEED * ELAPSED_TIME);
 					MainScene.add(unit.pos, vec);
 				}
 			}
@@ -169,27 +216,42 @@ class MainScene : AbstractScene {
 					offset = [Math.cos(theta) * UNIT_RADIUS, Math.sin(theta) * UNIT_RADIUS];
 					MainScene.add(unit1.pos, offset);
 					MainScene.sub(unit2.pos, offset);
-				} else if (d2 < (2.0 * UNIT_RADIUS) ** 2.0) {
+				} else if (d2 < (2.0 * UNIT_RADIUS) ** 2) {
+					// Separate.
 					centroid = [(unit1.pos[0] + unit2.pos[0]) / 2, (unit1.pos[1] + unit2.pos[1]) / 2];
 					offset = MainScene.vecTo(unit1.pos, unit2.pos);
 					MainScene.normalize(offset, UNIT_RADIUS);
 					unit1.pos = MainScene.diff(centroid, offset);
 					unit2.pos = MainScene.sum(centroid, offset);
+					// Try to attack each other.
+					unit1.tryAttack(unit2);
+					unit2.tryAttack(unit1);
 				}
+			}
+		}
+
+		// Check for dead units.
+		for (i = 0; i < this.units.length; ++i) {
+			unit = this.units[i];
+			if (unit.health <= 0.0) {
+				this.units[i] = new Corpse(unit.pos);
 			}
 		}
 
 		// Check for stuck units and stop them.
 		for (unit : this.units) {
 			if (unit.targetPos != null) {
-				if (MainScene.d2(unit.pos, unit.lastPos) < (PROGRESS_THRESHOLD * UNIT_SPEED) ** 2.0) {
+				if (MainScene.d2(unit.pos, unit.lastPos) < (PROGRESS_THRESHOLD * UNIT_SPEED * ELAPSED_TIME) ** 2) {
 					unit.targetPos = null;
 				}
 			}
 		}
 
-		// The camera follows the necromage.
-		this.cameraPos = [Math.floor(this.necromage.pos[0]), Math.floor(this.necromage.pos[1])];
+		// Camera movement.
+		this.cameraPos =
+			[ Math.floor(this.necromage.pos[0] + mousePos[0] - X_RES / 2)
+			, Math.floor(this.necromage.pos[1] + mousePos[1] - Y_RES / 2)
+			];
 	}
 
 	function render() {
@@ -201,13 +263,6 @@ class MainScene : AbstractScene {
 				bg.draw(i * bg.width - this.cameraPos[0] % bg.width, j * bg.height - this.cameraPos[1] % bg.height);
 			}
 		}
-
-		p1 = this.gameToScreen([0, 100]);
-		p2 = this.gameToScreen([0, -100]);
-		p3 = this.gameToScreen([100, 0]);
-		p4 = this.gameToScreen([-100, 0]);
-		Graphics2D.Draw.line(p1[0], p1[1], p2[0], p2[1], 1, 255, 255, 255);
-		Graphics2D.Draw.line(p3[0], p3[1], p4[0], p4[1], 1, 255, 255, 255);
 
 		for (unit : this.units) {
 			pos = this.gameToScreen(unit.pos);
