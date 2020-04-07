@@ -1,0 +1,95 @@
+import Graphics2D;
+import Graphics2DText;
+import Math;
+import Random;
+import TwoCansAlpha4;
+
+const UNIT_RADIUS = 10.0;
+const UNIT_HEALTH = 100.0;
+const UNIT_SPEED = 80;
+const UNIT_ATTACK_SPEED = 1.0;
+const UNIT_ATTACK_DAMAGE = 10.0;
+
+const PROGRESS_THRESHOLD = 0.25;
+
+enum Faction { ALLY, ENEMY, NEUTRAL }
+
+class Unit {
+	field pos;
+	field angle = Random.randomFloat() * 2 * Math.PI;
+	field health = UNIT_HEALTH;
+	field cooldown = 0.0;
+	field faction;
+
+	field targetPos;
+	field lastPos;
+	field color;
+
+	constructor(pos, faction) {
+		this.pos = pos;
+		this.faction = faction;
+	}
+
+	function draw(pos) {
+		Graphics2D.Draw.ellipse
+			( Math.floor(pos[0]) - UNIT_RADIUS, Math.floor(pos[1]) - UNIT_RADIUS
+			, 2 * UNIT_RADIUS, 2 * UNIT_RADIUS
+			, this.color[0], this.color[1], this.color[2]
+			);
+	}
+	function drawHealth(pos) {
+		if (this.health > 0.0) {
+			pct = this.health / UNIT_HEALTH;
+			if (pct > 0.5) {
+				r = 255 * (1.0 - pct) / 0.5;
+				g = 255;
+			} else {
+				r = 255;
+				g = 255 * 2 * pct;
+			}
+			Graphics2D.Draw.rectangle
+				( Math.floor(pos[0]) - UNIT_RADIUS, Math.floor(pos[1]) - UNIT_RADIUS
+				, 2 * UNIT_RADIUS * pct, UNIT_RADIUS / 4
+				, r, g, 0
+				);
+		}
+	}
+
+	function tryAttack(unit) {
+		// Neutral units don't get involved in fights.
+		if (this.faction == Faction.NEUTRAL || unit.faction == Faction.NEUTRAL) return;
+		// Units from the same faction don't fight.
+		if (this.faction == unit.faction) return;
+		// Can't attack while on cooldown.
+		if (this.cooldown > 0.0) return;
+
+		this.cooldown = 1.0 / UNIT_ATTACK_SPEED;
+		unit.health -= UNIT_ATTACK_DAMAGE;
+	}
+}
+
+class Necromage : Unit {
+	field zombies = [];
+
+	constructor(pos) : base(pos, Faction.ALLY) {
+		this.color = [0, 192, 255];
+	}
+}
+
+class Zombie : Unit {
+	constructor(pos) : base(pos, Faction.ALLY) {
+		this.color = [64, 128, 0];
+	}
+}
+
+class Peasant : Unit {
+	constructor(pos) : base(pos, Faction.ENEMY) {
+		this.color = [128, 96, 64];
+	}
+}
+
+class Corpse : Unit {
+	constructor(pos) : base(pos, Faction.NEUTRAL) {
+		this.color = [128, 128, 128];
+	}
+}

@@ -2,7 +2,7 @@
 	"title": "The Necromage",
 	"id": "Necromage",
 	"description": "Conquer the land with necromagic.",
-	"icons": ["assets/icon32.png", "assets/icon256.png"],
+	"icons": ["assets/icon32.png", "assets/icon200.png", "assets/icon256.png"],
 
 	"deps": [
 		"%TWOCANS_SDK%/TwoCansAlpha4"
@@ -11,6 +11,7 @@
 	"source": "source",
 	"compilerlocale": "en",
 	"output": "output/%TARGET_NAME%",
+	"delegate-main-to": "TwoCansAlpha4",
 
 	"image-sheets": [
 		{
@@ -27,7 +28,8 @@
 		{ "name": "screen_width", "value": 800 },
 		{ "name": "screen_height", "value": 600 },
 		{ "name": "use_60_fps", "value": true },
-		{ "name": "enable_wasd", "value": true }
+		{ "name": "enable_wasd", "value": true },
+		{ "name": "thumbnail", "value": "assets/icon200.png" }
 	],
 
 	"targets": [

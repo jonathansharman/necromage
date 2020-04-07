@@ -9,79 +9,12 @@ const Y_RES = 600;
 const FPS = 60.0;
 const ELAPSED_TIME = 1.0 / FPS;
 
-const H_SCROLL = 200;
-const V_SCROLL = 200;
-const SCROLL_MULTIPLIER = 0.1;
-
-const UNIT_RADIUS = 10.0;
-const UNIT_SPEED = 80;
-const UNIT_ATTACK_SPEED = 1.0;
-const UNIT_ATTACK_DAMAGE = 10.0;
-
-const PROGRESS_THRESHOLD = 0.25;
-
 const CELL_SIZE = 30.0;
-
-enum Faction { ALLY, ENEMY, NEUTRAL }
-
-class Unit {
-	field pos;
-	field angle = Random.randomFloat() * 2 * Math.PI;
-	field health = 100.0;
-	field cooldown = 0.0;
-	field faction;
-
-	field targetPos;
-	field lastPos;
-	field color;
-
-	constructor(pos, faction) {
-		this.pos = pos;
-		this.faction = faction;
-	}
-
-	function tryAttack(unit) {
-		// Neutral units don't get involved in fights.
-		if (this.faction == Faction.NEUTRAL || unit.faction == Faction.NEUTRAL) return;
-		// Units from the same faction don't fight.
-		if (this.faction == unit.faction) return;
-		// Can't attack while on cooldown.
-		if (this.cooldown > 0.0) return;
-
-		this.cooldown = 1.0 / UNIT_ATTACK_SPEED;
-		unit.health -= UNIT_ATTACK_DAMAGE;
-	}
-}
-
-class Necromage : Unit {
-	field zombies = [];
-
-	constructor(pos) : base(pos, Faction.ALLY) {
-		this.color = [0, 192, 255];
-	}
-}
-
-class Zombie : Unit {
-	constructor(pos) : base(pos, Faction.ALLY) {
-		this.color = [64, 128, 0];
-	}
-}
-
-class Peasant : Unit {
-	constructor(pos) : base(pos, Faction.ENEMY) {
-		this.color = [128, 96, 64];
-	}
-}
-
-class Corpse : Unit {
-	constructor(pos) : base(pos, Faction.NEUTRAL) {
-		this.color = [128, 128, 128];
-	}
-}
 
 class MainScene : AbstractScene {
 	field cameraPos;
 	field mouseDown = false;
+	field lastMousePos = [0, 0];
 
 	field units = [];
 	field necromage;
@@ -173,14 +106,38 @@ class MainScene : AbstractScene {
 			MainScene.add(this.necromage.pos, vel);
 		}
 
+		// Check events.
 		for (e : events) {
 			switch (e.type) {
 				case EventType.MOUSE_PRESS:
-					// Swarm command.
-					targetPos = this.screenToGame(mousePos);
-					for (zombie : this.necromage.zombies) {
-						zombie.targetPos = targetPos.clone();
-					}	
+					this.mouseDown = true;
+					break;
+				case EventType.MOUSE_RELEASE:
+					this.mouseDown = false;
+					break;
+				case EventType.MOUSE_MOVE:
+					// Drag camera.
+					mousePos = [e.x, e.y];
+					if (this.mouseDown) {
+						this.cameraPos[0] += (this.lastMousePos[0] - mousePos[0]);
+						this.cameraPos[1] += (this.lastMousePos[1] - mousePos[1]);
+					}
+					this.lastMousePos = mousePos;
+					break;
+				case EventType.KEY:
+					if (e.down) {
+						switch (e.key) {
+							case KeyboardKey.NUM_1:
+								// Swarm command.
+								targetPos = this.screenToGame(mousePos);
+								for (zombie : this.necromage.zombies) {
+									zombie.targetPos = targetPos.clone();
+								}
+								break;
+							default:
+								break;
+						}
+					}
 					break;
 				default:
 					break;
@@ -248,10 +205,10 @@ class MainScene : AbstractScene {
 		}
 
 		// Camera movement.
-		this.cameraPos =
-			[ Math.floor(this.necromage.pos[0] + mousePos[0] - X_RES / 2)
-			, Math.floor(this.necromage.pos[1] + mousePos[1] - Y_RES / 2)
-			];
+		//this.cameraPos =
+		//	[ Math.floor(this.necromage.pos[0] + mousePos[0] - X_RES / 2)
+		//	, Math.floor(this.necromage.pos[1] + mousePos[1] - Y_RES / 2)
+		//	];
 	}
 
 	function render() {
@@ -265,16 +222,10 @@ class MainScene : AbstractScene {
 		}
 
 		for (unit : this.units) {
-			pos = this.gameToScreen(unit.pos);
-			color = unit.targetPos == null
-				? unit.color
-				: [(unit.color[0] + 255) / 2, (unit.color[1] + 255) / 2, (unit.color[2] + 255) / 2]
-				;
-			Graphics2D.Draw.ellipse
-				( Math.floor(pos[0]) - UNIT_RADIUS, Math.floor(pos[1]) - UNIT_RADIUS
-				, 2 * UNIT_RADIUS, 2 * UNIT_RADIUS
-				, color[0], color[1], color[2]
-				);
+			unit.draw(this.gameToScreen(unit.pos));
+		}
+		for (unit : this.units) {
+			unit.drawHealth(this.gameToScreen(unit.pos));
 		}
 	}
 }
